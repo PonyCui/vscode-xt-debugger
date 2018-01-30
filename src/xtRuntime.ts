@@ -9,28 +9,20 @@ import * as WebSocket from 'ws'
 var socketServer: WebSocket.Server | undefined
 var socketClients: WebSocket[] = []
 
-export interface MockBreakpoint {
+export interface XTBreakpoint {
 	id: number;
 	line: number;
 	verified: boolean;
 }
 
-export class MockRuntime extends EventEmitter {
+export class XTRuntime extends EventEmitter {
 
-	// the initial (and one and only) file we are 'debugging'
 	private _sourceCode: string | undefined = undefined
-
-	private _sourceFile: string;
-
-	public get sourceFile() {
-		return this._sourceFile;
-	}
-
-	private _breakPoints = new Map<string, MockBreakpoint[]>();
+	private _breakPoints = new Map<string, XTBreakpoint[]>();
 	private _breakpointId = 1;
 	private _breakingId: string | undefined = undefined;
-	_breakingThisVariables: any = {};
-	_breakingScopeVariables: any = {};
+	public _breakingThisVariables: any = {};
+	public _breakingScopeVariables: any = {};
 
 	constructor() {
 		super();
@@ -158,11 +150,11 @@ export class MockRuntime extends EventEmitter {
 		})
 	}
 
-	public setBreakPoint(path: string, line: number): MockBreakpoint {
-		const bp = <MockBreakpoint>{ verified: false, line, id: this._breakpointId++ };
+	public setBreakPoint(path: string, line: number): XTBreakpoint {
+		const bp = <XTBreakpoint>{ verified: false, line, id: this._breakpointId++ };
 		let bps = this._breakPoints.get(path);
 		if (!bps) {
-			bps = new Array<MockBreakpoint>();
+			bps = new Array<XTBreakpoint>();
 			this._breakPoints.set(path, bps);
 		}
 		bps.push(bp);
@@ -175,7 +167,7 @@ export class MockRuntime extends EventEmitter {
 		return bp;
 	}
 
-	public clearBreakPoint(path: string, line: number): MockBreakpoint | undefined {
+	public clearBreakPoint(path: string, line: number): XTBreakpoint | undefined {
 		let bps = this._breakPoints.get(path);
 		if (bps) {
 			const index = bps.findIndex(bp => bp.line === line);
@@ -202,7 +194,6 @@ export class MockRuntime extends EventEmitter {
 		})
 	}
 
-	// private methods
 	private verifyBreakpoints(path: string): void {
 		let bps = this._breakPoints.get(path);
 		if (bps) {

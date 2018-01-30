@@ -8,10 +8,9 @@ const events_1 = require("events");
 const WebSocket = require("ws");
 var socketServer;
 var socketClients = [];
-class MockRuntime extends events_1.EventEmitter {
+class XTRuntime extends events_1.EventEmitter {
     constructor() {
         super();
-        // the initial (and one and only) file we are 'debugging'
         this._sourceCode = undefined;
         this._breakPoints = new Map();
         this._breakpointId = 1;
@@ -19,9 +18,6 @@ class MockRuntime extends events_1.EventEmitter {
         this._breakingThisVariables = {};
         this._breakingScopeVariables = {};
         this.setupSocketServer();
-    }
-    get sourceFile() {
-        return this._sourceFile;
     }
     setupSocketServer() {
         if (socketServer === undefined) {
@@ -177,7 +173,6 @@ class MockRuntime extends events_1.EventEmitter {
             client.send(JSON.stringify({ action: "clearBreakPoints", path }));
         });
     }
-    // private methods
     verifyBreakpoints(path) {
         let bps = this._breakPoints.get(path);
         if (bps) {
@@ -193,5 +188,5 @@ class MockRuntime extends events_1.EventEmitter {
         });
     }
 }
-exports.MockRuntime = MockRuntime;
-//# sourceMappingURL=mockRuntime.js.map
+exports.XTRuntime = XTRuntime;
+//# sourceMappingURL=xtRuntime.js.map

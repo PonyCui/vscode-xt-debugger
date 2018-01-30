@@ -3,37 +3,25 @@
  *--------------------------------------------------------*/
 
 import {
-	Logger, logger,
 	DebugSession, LoggingDebugSession,
 	InitializedEvent, TerminatedEvent, StoppedEvent, BreakpointEvent, OutputEvent,
 	Thread, StackFrame, Scope, Source, Handles, Breakpoint
 } from 'vscode-debugadapter';
 import { DebugProtocol } from 'vscode-debugprotocol';
 import { basename } from 'path';
-import { MockRuntime, MockBreakpoint } from './mockRuntime';
+import { XTRuntime, XTBreakpoint } from './xtRuntime';
 
-/**
- * This interface describes the mock-debug specific launch attributes
- * (which are not part of the Debug Adapter Protocol).
- * The schema for these attributes lives in the package.json of the mock-debug extension.
- * The interface should always match this schema.
- */
 interface LaunchRequestArguments extends DebugProtocol.LaunchRequestArguments {
-	/** An absolute path to the "program" to debug. */
 	program: string;
-	/** Automatically stop target after launch. If not specified, target does not stop. */
-	stopOnEntry?: boolean;
-	/** enable logging the Debug Adapter Protocol */
-	trace?: boolean;
 }
 
-class MockDebugSession extends LoggingDebugSession {
+class XTDebugSession extends LoggingDebugSession {
 
 	// we don't support multiple threads, so we can use a hardcoded ID for the default thread
 	private static THREAD_ID = 1;
 
 	// a Mock runtime (or debugger)
-	private _runtime: MockRuntime;
+	private _runtime: XTRuntime;
 
 	private _variableHandles = new Handles<string>();
 
@@ -42,28 +30,23 @@ class MockDebugSession extends LoggingDebugSession {
 	 * We configure the default implementation of a debug adapter here.
 	 */
 	public constructor() {
-		super("mock-debug.txt");
-
-		// this debugger uses zero-based lines and columns
+		super("xt-debugger-debug.txt");
 		this.setDebuggerLinesStartAt1(false);
 		this.setDebuggerColumnsStartAt1(false);
-
-		this._runtime = new MockRuntime();
-
-		// setup event handlers
+		this._runtime = new XTRuntime();
 		this._runtime.on('stopOnEntry', () => {
-			this.sendEvent(new StoppedEvent('entry', MockDebugSession.THREAD_ID));
+			this.sendEvent(new StoppedEvent('entry', XTDebugSession.THREAD_ID));
 		});
 		this._runtime.on('stopOnStep', () => {
-			this.sendEvent(new StoppedEvent('step', MockDebugSession.THREAD_ID));
+			this.sendEvent(new StoppedEvent('step', XTDebugSession.THREAD_ID));
 		});
 		this._runtime.on('stopOnBreakpoint', () => {
-			this.sendEvent(new StoppedEvent('breakpoint', MockDebugSession.THREAD_ID));
+			this.sendEvent(new StoppedEvent('breakpoint', XTDebugSession.THREAD_ID));
 		});
 		this._runtime.on('stopOnException', () => {
-			this.sendEvent(new StoppedEvent('exception', MockDebugSession.THREAD_ID));
+			this.sendEvent(new StoppedEvent('exception', XTDebugSession.THREAD_ID));
 		});
-		this._runtime.on('breakpointValidated', (bp: MockBreakpoint) => {
+		this._runtime.on('breakpointValidated', (bp: XTBreakpoint) => {
 			this.sendEvent(new BreakpointEvent('changed', <DebugProtocol.Breakpoint>{ verified: bp.verified, id: bp.id }));
 		});
 		this._runtime.on('output', (text, filePath, line, column) => {
@@ -78,10 +61,6 @@ class MockDebugSession extends LoggingDebugSession {
 		});
 	}
 
-	/**
-	 * The 'initialize' request is the first request called by the frontend
-	 * to interrogate the features the debug adapter provides.
-	 */
 	protected initializeRequest(response: DebugProtocol.InitializeResponse, args: DebugProtocol.InitializeRequestArguments): void {
 		this.sendEvent(new InitializedEvent());
 		response.body = response.body || {};
@@ -91,8 +70,7 @@ class MockDebugSession extends LoggingDebugSession {
 	}
 
 	protected launchRequest(response: DebugProtocol.LaunchResponse, args: LaunchRequestArguments): void {
-		logger.setup(args.trace ? Logger.LogLevel.Verbose : Logger.LogLevel.Stop, false);
-		this._runtime.start(args.program, !!args.stopOnEntry);
+		this._runtime.start(args.program, false);
 		this.sendResponse(response);
 	}
 
@@ -120,7 +98,7 @@ class MockDebugSession extends LoggingDebugSession {
 	protected threadsRequest(response: DebugProtocol.ThreadsResponse): void {
 		response.body = {
 			threads: [
-				new Thread(MockDebugSession.THREAD_ID, "thread 1")
+				new Thread(XTDebugSession.THREAD_ID, "thread 1")
 			]
 		};
 		this.sendResponse(response);
@@ -238,11 +216,10 @@ class MockDebugSession extends LoggingDebugSession {
 		this.sendResponse(response);
 	}
 
-	//---- helpers
-
 	private createSource(filePath: string): Source {
 		return new Source(basename(filePath), this.convertDebuggerPathToClient(filePath), undefined, undefined, 'mock-adapter-data');
 	}
+
 }
 
-DebugSession.run(MockDebugSession);
+DebugSession.run(XTDebugSession);

@@ -5,31 +5,29 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const vscode_debugadapter_1 = require("vscode-debugadapter");
 const path_1 = require("path");
-const mockRuntime_1 = require("./mockRuntime");
-class MockDebugSession extends vscode_debugadapter_1.LoggingDebugSession {
+const xtRuntime_1 = require("./xtRuntime");
+class XTDebugSession extends vscode_debugadapter_1.LoggingDebugSession {
     /**
      * Creates a new debug adapter that is used for one debug session.
      * We configure the default implementation of a debug adapter here.
      */
     constructor() {
-        super("mock-debug.txt");
+        super("xt-debugger-debug.txt");
         this._variableHandles = new vscode_debugadapter_1.Handles();
-        // this debugger uses zero-based lines and columns
         this.setDebuggerLinesStartAt1(false);
         this.setDebuggerColumnsStartAt1(false);
-        this._runtime = new mockRuntime_1.MockRuntime();
-        // setup event handlers
+        this._runtime = new xtRuntime_1.XTRuntime();
         this._runtime.on('stopOnEntry', () => {
-            this.sendEvent(new vscode_debugadapter_1.StoppedEvent('entry', MockDebugSession.THREAD_ID));
+            this.sendEvent(new vscode_debugadapter_1.StoppedEvent('entry', XTDebugSession.THREAD_ID));
         });
         this._runtime.on('stopOnStep', () => {
-            this.sendEvent(new vscode_debugadapter_1.StoppedEvent('step', MockDebugSession.THREAD_ID));
+            this.sendEvent(new vscode_debugadapter_1.StoppedEvent('step', XTDebugSession.THREAD_ID));
         });
         this._runtime.on('stopOnBreakpoint', () => {
-            this.sendEvent(new vscode_debugadapter_1.StoppedEvent('breakpoint', MockDebugSession.THREAD_ID));
+            this.sendEvent(new vscode_debugadapter_1.StoppedEvent('breakpoint', XTDebugSession.THREAD_ID));
         });
         this._runtime.on('stopOnException', () => {
-            this.sendEvent(new vscode_debugadapter_1.StoppedEvent('exception', MockDebugSession.THREAD_ID));
+            this.sendEvent(new vscode_debugadapter_1.StoppedEvent('exception', XTDebugSession.THREAD_ID));
         });
         this._runtime.on('breakpointValidated', (bp) => {
             this.sendEvent(new vscode_debugadapter_1.BreakpointEvent('changed', { verified: bp.verified, id: bp.id }));
@@ -45,10 +43,6 @@ class MockDebugSession extends vscode_debugadapter_1.LoggingDebugSession {
             this.sendEvent(new vscode_debugadapter_1.TerminatedEvent());
         });
     }
-    /**
-     * The 'initialize' request is the first request called by the frontend
-     * to interrogate the features the debug adapter provides.
-     */
     initializeRequest(response, args) {
         this.sendEvent(new vscode_debugadapter_1.InitializedEvent());
         response.body = response.body || {};
@@ -57,8 +51,7 @@ class MockDebugSession extends vscode_debugadapter_1.LoggingDebugSession {
         this.sendResponse(response);
     }
     launchRequest(response, args) {
-        vscode_debugadapter_1.logger.setup(args.trace ? vscode_debugadapter_1.Logger.LogLevel.Verbose : vscode_debugadapter_1.Logger.LogLevel.Stop, false);
-        this._runtime.start(args.program, !!args.stopOnEntry);
+        this._runtime.start(args.program, false);
         this.sendResponse(response);
     }
     disconnectRequest(response, args) {
@@ -83,7 +76,7 @@ class MockDebugSession extends vscode_debugadapter_1.LoggingDebugSession {
     threadsRequest(response) {
         response.body = {
             threads: [
-                new vscode_debugadapter_1.Thread(MockDebugSession.THREAD_ID, "thread 1")
+                new vscode_debugadapter_1.Thread(XTDebugSession.THREAD_ID, "thread 1")
             ]
         };
         this.sendResponse(response);
@@ -198,12 +191,11 @@ class MockDebugSession extends vscode_debugadapter_1.LoggingDebugSession {
         };
         this.sendResponse(response);
     }
-    //---- helpers
     createSource(filePath) {
         return new vscode_debugadapter_1.Source(path_1.basename(filePath), this.convertDebuggerPathToClient(filePath), undefined, undefined, 'mock-adapter-data');
     }
 }
 // we don't support multiple threads, so we can use a hardcoded ID for the default thread
-MockDebugSession.THREAD_ID = 1;
-vscode_debugadapter_1.DebugSession.run(MockDebugSession);
-//# sourceMappingURL=mockDebug.js.map
+XTDebugSession.THREAD_ID = 1;
+vscode_debugadapter_1.DebugSession.run(XTDebugSession);
+//# sourceMappingURL=xtDebug.js.map

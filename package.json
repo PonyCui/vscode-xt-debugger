@@ -1,16 +1,16 @@
 {
-  "name": "mock-debug",
-  "displayName": "Mock Debug",
-  "version": "0.26.0",
-  "publisher": "andreweinand",
-  "description": "Starter extension for developing debug adapters for VS Code.",
+  "name": "vscode-xt-debugger",
+  "displayName": "XT Debugger",
+  "version": "0.0.1",
+  "publisher": "PonyCui",
+  "description": "You use XT Debugger to debug application on VSCode.",
   "author": {
-    "name": "Microsoft Corporation",
-    "email": "aweinand@microsoft.com"
+    "name": "PonyCui",
+    "email": "ponycui@me.com"
   },
   "license": "MIT",
   "keywords": [
-    "multi-root ready"
+    "xt"
   ],
   "engines": {
     "vscode": "^1.18.0",
@@ -23,10 +23,10 @@
   "private": true,
   "repository": {
     "type": "git",
-    "url": "https://github.com/Microsoft/vscode-mock-debug.git"
+    "url": "https://github.com/XTStudio/vscode-xt-debugger.git"
   },
   "bugs": {
-    "url": "https://github.com/Microsoft/vscode-mock-debug/issues"
+    "url": "https://github.com/XTStudio/vscode-xt-debugger/issues"
   },
   "dependencies": {
     "vscode-debugadapter": "1.25.0",
@@ -48,27 +48,25 @@
     "compile": "tsc -p ./src",
     "tslint": "tslint ./src/**/*.ts",
     "watch": "tsc -w -p ./src",
-    "test": "mocha -u tdd ./out/tests/",
     "postinstall": "node ./node_modules/vscode/bin/install",
     "package": "vsce package",
     "publish": "vsce publish"
   },
   "main": "./out/extension",
   "activationEvents": [
-    "onDebug",
-    "onCommand:extension.mock-debug.getProgramName"
+    "onDebug"
   ],
   "contributes": {
     "breakpoints": [
       {
-        "language": "markdown"
+        "language": "javascript"
       }
     ],
     "debuggers": [
       {
-        "type": "mock",
-        "label": "Mock Debug",
-        "program": "./out/mockDebug.js",
+        "type": "xt",
+        "label": "XT",
+        "program": "./out/xtDebug.js",
         "runtime": "node",
         "configurationAttributes": {
           "launch": {
@@ -78,47 +76,32 @@
             "properties": {
               "program": {
                 "type": "string",
-                "description": "Absolute path to a text file.",
-                "default": "${workspaceFolder}/${command:AskForProgramName}"
-              },
-              "stopOnEntry": {
-                "type": "boolean",
-                "description": "Automatically stop after launch.",
-                "default": true
-              },
-              "trace": {
-                "type": "boolean",
-                "description": "Enable logging of the Debug Adapter Protocol.",
-                "default": true
+                "description": "Absolute path to a javascript file.",
+                "default": "${workspaceFolder}/dist/app.min.js"
               }
             }
           }
         },
         "initialConfigurations": [
           {
-            "type": "mock",
+            "type": "xt",
             "request": "launch",
-            "name": "Ask for file name",
-            "program": "${workspaceFolder}/${command:AskForProgramName}",
-            "stopOnEntry": true
+            "name": "Run XT Application",
+            "program": "${workspaceFolder}/dist/app.min.js"
           }
         ],
         "configurationSnippets": [
           {
-            "label": "Mock Debug: Launch",
-            "description": "A new configuration for 'debugging' a user selected markdown file.",
+            "label": "XT Debugger: Launch",
+            "description": "Select dist file for XT application.",
             "body": {
-              "type": "mock",
+              "type": "xt",
               "request": "launch",
-              "name": "Ask for file name",
-              "program": "^\"\\${workspaceFolder}/\\${command:AskForProgramName}\"",
-              "stopOnEntry": true
+              "name": "Run XT Application",
+              "program": "^\"\\${workspaceFolder}/dist/app.min.js\""
             }
           }
-        ],
-        "variables": {
-          "AskForProgramName": "extension.mock-debug.getProgramName"
-        }
+        ]
       }
     ]
   }
