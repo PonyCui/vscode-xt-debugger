@@ -37,8 +37,8 @@ class MockDebugSession extends vscode_debugadapter_1.LoggingDebugSession {
         this._runtime.on('output', (text, filePath, line, column) => {
             const e = new vscode_debugadapter_1.OutputEvent(`${text}\n`);
             e.body.source = this.createSource(filePath);
-            e.body.line = this.convertDebuggerLineToClient(line);
-            e.body.column = this.convertDebuggerColumnToClient(column);
+            e.body.line = (parseInt(line) + 1) || 0;
+            e.body.column = 0;
             this.sendEvent(e);
         });
         this._runtime.on('end', () => {
@@ -57,32 +57,30 @@ class MockDebugSession extends vscode_debugadapter_1.LoggingDebugSession {
         this.sendResponse(response);
     }
     launchRequest(response, args) {
-        // make sure to 'Stop' the buffered logging if 'trace' is not set
         vscode_debugadapter_1.logger.setup(args.trace ? vscode_debugadapter_1.Logger.LogLevel.Verbose : vscode_debugadapter_1.Logger.LogLevel.Stop, false);
-        // start the program in the runtime
         this._runtime.start(args.program, !!args.stopOnEntry);
+        this.sendResponse(response);
+    }
+    disconnectRequest(response, args) {
+        this._runtime.stop();
         this.sendResponse(response);
     }
     setBreakPointsRequest(response, args) {
         const path = args.source.path;
         const clientLines = args.lines || [];
-        // clear all breakpoints for this file
         this._runtime.clearBreakpoints(path);
-        // set and verify breakpoint locations
         const actualBreakpoints = clientLines.map(l => {
             let { verified, line, id } = this._runtime.setBreakPoint(path, this.convertClientLineToDebugger(l));
             const bp = new vscode_debugadapter_1.Breakpoint(verified, this.convertDebuggerLineToClient(line));
             bp.id = id;
             return bp;
         });
-        // send back the actual breakpoint positions
         response.body = {
             breakpoints: actualBreakpoints
         };
         this.sendResponse(response);
     }
     threadsRequest(response) {
-        // runtime supports now threads so just return a default thread.
         response.body = {
             threads: [
                 new vscode_debugadapter_1.Thread(MockDebugSession.THREAD_ID, "thread 1")
@@ -101,8 +99,7 @@ class MockDebugSession extends vscode_debugadapter_1.LoggingDebugSession {
     scopesRequest(response, args) {
         const frameReference = args.frameId;
         const scopes = new Array();
-        scopes.push(new vscode_debugadapter_1.Scope("Local", this._variableHandles.create("local_" + frameReference), false));
-        scopes.push(new vscode_debugadapter_1.Scope("Global", this._variableHandles.create("global_" + frameReference), true));
+        scopes.push(new vscode_debugadapter_1.Scope("Variables", this._variableHandles.create("breakpoint_" + frameReference), false));
         response.body = {
             scopes: scopes
         };
@@ -111,31 +108,63 @@ class MockDebugSession extends vscode_debugadapter_1.LoggingDebugSession {
     variablesRequest(response, args) {
         const variables = new Array();
         const id = this._variableHandles.get(args.variablesReference);
-        if (id !== null) {
-            variables.push({
-                name: id + "_i",
-                type: "integer",
-                value: "123",
-                variablesReference: 0
-            });
-            variables.push({
-                name: id + "_f",
-                type: "float",
-                value: "3.14",
-                variablesReference: 0
-            });
-            variables.push({
-                name: id + "_s",
-                type: "string",
-                value: "hello world",
-                variablesReference: 0
-            });
-            variables.push({
-                name: id + "_o",
-                type: "object",
-                value: "Object",
-                variablesReference: this._variableHandles.create("object_")
-            });
+        if (id.indexOf("breakpoint_") === 0) {
+            for (const key in this._runtime._breakingScopeVariables) {
+                const value = this._runtime._breakingScopeVariables[key];
+                variables.push({
+                    name: key,
+                    type: typeof value,
+                    value: value.toString(),
+                    variablesReference: (typeof value === "object" ? this._variableHandles.create("object_scope_" + key) : 0)
+                });
+            }
+            for (const key in this._runtime._breakingThisVariables) {
+                const value = this._runtime._breakingThisVariables[key];
+                variables.push({
+                    name: "this." + key,
+                    type: typeof value,
+                    value: value.toString(),
+                    variablesReference: (typeof value === "object" ? this._variableHandles.create("object_this_" + key) : 0)
+                });
+            }
+        }
+        else if (id.indexOf("object_scope_") === 0) {
+            try {
+                const components = id.split("_");
+                let obj = this._runtime._breakingScopeVariables;
+                components.forEach((it, idx) => { if (idx > 1) {
+                    obj = obj[it];
+                } });
+                for (const key in obj) {
+                    const value = obj[key];
+                    variables.push({
+                        name: key,
+                        type: typeof value,
+                        value: value.toString(),
+                        variablesReference: (typeof value === "object" ? this._variableHandles.create(id + "_" + key) : 0)
+                    });
+                }
+            }
+            catch (error) { }
+        }
+        else if (id.indexOf("object_this_") === 0) {
+            try {
+                const components = id.split("_");
+                let obj = this._runtime._breakingThisVariables;
+                components.forEach((it, idx) => { if (idx > 1) {
+                    obj = obj[it];
+                } });
+                for (const key in obj) {
+                    const value = obj[key];
+                    variables.push({
+                        name: key,
+                        type: typeof value,
+                        value: value.toString(),
+                        variablesReference: (typeof value === "object" ? this._variableHandles.create(id + "_" + key) : 0)
+                    });
+                }
+            }
+            catch (error) { }
         }
         response.body = {
             variables: variables
@@ -146,36 +175,22 @@ class MockDebugSession extends vscode_debugadapter_1.LoggingDebugSession {
         this._runtime.continue();
         this.sendResponse(response);
     }
-    reverseContinueRequest(response, args) { }
+    stepInRequest(response, args) {
+        this._runtime.step();
+        this.sendResponse(response);
+    }
+    stepOutRequest(response, args) {
+        this._runtime.step();
+        this.sendResponse(response);
+    }
     nextRequest(response, args) {
         this._runtime.step();
         this.sendResponse(response);
     }
-    stepBackRequest(response, args) { }
     evaluateRequest(response, args) {
         let reply = undefined;
         if (args.context === 'repl') {
-            // 'evaluate' supports to create and delete breakpoints from the 'repl':
-            const matches = /new +([0-9]+)/.exec(args.expression);
-            if (matches && matches.length === 2) {
-                const mbp = this._runtime.setBreakPoint(this._runtime.sourceFile, this.convertClientLineToDebugger(parseInt(matches[1])));
-                const bp = new vscode_debugadapter_1.Breakpoint(mbp.verified, this.convertDebuggerLineToClient(mbp.line), undefined, this.createSource(this._runtime.sourceFile));
-                bp.id = mbp.id;
-                this.sendEvent(new vscode_debugadapter_1.BreakpointEvent('new', bp));
-                reply = `breakpoint created`;
-            }
-            else {
-                const matches = /del +([0-9]+)/.exec(args.expression);
-                if (matches && matches.length === 2) {
-                    const mbp = this._runtime.clearBreakPoint(this._runtime.sourceFile, this.convertClientLineToDebugger(parseInt(matches[1])));
-                    if (mbp) {
-                        const bp = new vscode_debugadapter_1.Breakpoint(false);
-                        bp.id = mbp.id;
-                        this.sendEvent(new vscode_debugadapter_1.BreakpointEvent('removed', bp));
-                        reply = `breakpoint deleted`;
-                    }
-                }
-            }
+            this._runtime.eval(args.expression);
         }
         response.body = {
             result: reply ? reply : `evaluate(context: '${args.context}', '${args.expression}')`,

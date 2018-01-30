@@ -5,7 +5,6 @@
 import { readFileSync } from 'fs';
 import { EventEmitter } from 'events';
 import * as WebSocket from 'ws'
-var fs = require("fs")
 
 var socketServer: WebSocket.Server | undefined
 var socketClients: WebSocket[] = []
@@ -27,20 +26,11 @@ export class MockRuntime extends EventEmitter {
 		return this._sourceFile;
 	}
 
-	// the contents (= lines) of the one and only file
-	private _sourceLines: string[];
-
-	// This is the next line that will be 'executed'
-	private _currentLine = 0;
-
-	// maps from sourceFile to array of Mock breakpoints
 	private _breakPoints = new Map<string, MockBreakpoint[]>();
-
-	// since we want to send breakpoint events, we will assign an id to every event
-	// so that the frontend can match events with breakpoints.
 	private _breakpointId = 1;
-
 	private _breakingId: string | undefined = undefined;
+	_breakingThisVariables: any = {};
+	_breakingScopeVariables: any = {};
 
 	constructor() {
 		super();
@@ -84,10 +74,17 @@ export class MockRuntime extends EventEmitter {
 					const obj = JSON.parse(data)
 					if (obj.type === "console.log") {
 						const payload = new Buffer(obj.payload, 'base64').toString()
-						this.sendEvent('output', payload, 'XT.Studio')
+						const bpIdentifier  = typeof obj.bpIdentifier === "string" && obj.bpIdentifier.length > 0 ? obj.bpIdentifier : "undefined:0"
+						this.sendEvent('output', payload, bpIdentifier.split(":")[0], bpIdentifier.split(":")[1])
 					}
 					else if (obj.type === "break") {
 						this._breakingId = obj.bpIdentifier
+						try {
+							this._breakingThisVariables = JSON.parse(obj.this)
+						} catch (error) { }
+						try {
+							this._breakingScopeVariables = JSON.parse(obj.scope)
+						} catch (error) { }
 						this.sendEvent('stopOnBreakpoint');
 					}
 				} catch (error) { }
@@ -95,11 +92,8 @@ export class MockRuntime extends EventEmitter {
 		})
 	}
 
-	/**
-	 * Start executing the given program.
-	 */
 	public start(program: string, stopOnEntry: boolean) {
-		this._sourceCode = fs.readFileSync(program).toString('base64')
+		this._sourceCode = readFileSync(program).toString('base64')
 		socketClients.filter(client => {
 			return client.readyState === WebSocket.OPEN
 		}).forEach(client => {
@@ -108,9 +102,22 @@ export class MockRuntime extends EventEmitter {
 		})
 	}
 
-	/**
-	 * Continue execution to the end/beginning.
-	 */
+	public stop() {
+		socketClients.filter(client => {
+			return client.readyState === WebSocket.OPEN
+		}).forEach(client => {
+			client.send(JSON.stringify({ action: "stop" }))
+		})
+	}
+
+	public eval(expression: string) {
+		socketClients.filter(client => {
+			return client.readyState === WebSocket.OPEN
+		}).forEach(client => {
+			client.send(JSON.stringify({ action: "eval", expression }))
+		})
+	}
+
 	public continue() {
 		socketClients.filter(client => {
 			return client.readyState === WebSocket.OPEN
@@ -119,16 +126,14 @@ export class MockRuntime extends EventEmitter {
 		})
 	}
 
-	/**
-	 * Step to the next/previous non empty line.
-	 */
 	public step(reverse = false, event = 'stopOnStep') {
-		// this.run(reverse, event);
+		socketClients.filter(client => {
+			return client.readyState === WebSocket.OPEN
+		}).forEach(client => {
+			client.send(JSON.stringify({ action: "step" }))
+		})
 	}
 
-	/**
-	 * Returns a fake 'stacktrace' where every 'stackframe' is a word from the current line.
-	 */
 	public stack(): any {
 		const frames = new Array<any>();
 		if (this._breakingId) {
@@ -153,9 +158,6 @@ export class MockRuntime extends EventEmitter {
 		})
 	}
 
-	/*
-	 * Set breakpoint in file with given line.
-	 */
 	public setBreakPoint(path: string, line: number): MockBreakpoint {
 		const bp = <MockBreakpoint>{ verified: false, line, id: this._breakpointId++ };
 		let bps = this._breakPoints.get(path);
@@ -173,9 +175,6 @@ export class MockRuntime extends EventEmitter {
 		return bp;
 	}
 
-	/*
-	 * Clear breakpoint in file with given line.
-	 */
 	public clearBreakPoint(path: string, line: number): MockBreakpoint | undefined {
 		let bps = this._breakPoints.get(path);
 		if (bps) {
@@ -194,9 +193,6 @@ export class MockRuntime extends EventEmitter {
 		return undefined;
 	}
 
-	/*
-	 * Clear all breakpoints for file.
-	 */
 	public clearBreakpoints(path: string): void {
 		this._breakPoints.delete(path);
 		socketClients.filter(client => {
@@ -207,7 +203,6 @@ export class MockRuntime extends EventEmitter {
 	}
 
 	// private methods
-
 	private verifyBreakpoints(path: string): void {
 		let bps = this._breakPoints.get(path);
 		if (bps) {
@@ -223,4 +218,5 @@ export class MockRuntime extends EventEmitter {
 			this.emit(event, ...args);
 		});
 	}
+
 }

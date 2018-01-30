@@ -69,8 +69,8 @@ class MockDebugSession extends LoggingDebugSession {
 		this._runtime.on('output', (text, filePath, line, column) => {
 			const e: DebugProtocol.OutputEvent = new OutputEvent(`${text}\n`);
 			e.body.source = this.createSource(filePath);
-			e.body.line = this.convertDebuggerLineToClient(line);
-			e.body.column = this.convertDebuggerColumnToClient(column);
+			e.body.line = (parseInt(line) + 1) || 0;
+			e.body.column = 0;
 			this.sendEvent(e);
 		});
 		this._runtime.on('end', () => {
@@ -91,33 +91,26 @@ class MockDebugSession extends LoggingDebugSession {
 	}
 
 	protected launchRequest(response: DebugProtocol.LaunchResponse, args: LaunchRequestArguments): void {
-
-		// make sure to 'Stop' the buffered logging if 'trace' is not set
 		logger.setup(args.trace ? Logger.LogLevel.Verbose : Logger.LogLevel.Stop, false);
-
-		// start the program in the runtime
 		this._runtime.start(args.program, !!args.stopOnEntry);
+		this.sendResponse(response);
+	}
 
+	protected disconnectRequest(response: DebugProtocol.DisconnectResponse, args: DebugProtocol.DisconnectArguments): void {
+		this._runtime.stop()
 		this.sendResponse(response);
 	}
 
 	protected setBreakPointsRequest(response: DebugProtocol.SetBreakpointsResponse, args: DebugProtocol.SetBreakpointsArguments): void {
-
 		const path = <string>args.source.path;
 		const clientLines = args.lines || [];
-
-		// clear all breakpoints for this file
 		this._runtime.clearBreakpoints(path);
-
-		// set and verify breakpoint locations
 		const actualBreakpoints = clientLines.map(l => {
 			let { verified, line, id } = this._runtime.setBreakPoint(path, this.convertClientLineToDebugger(l));
 			const bp = <DebugProtocol.Breakpoint>new Breakpoint(verified, this.convertDebuggerLineToClient(line));
 			bp.id = id;
 			return bp;
 		});
-
-		// send back the actual breakpoint positions
 		response.body = {
 			breakpoints: actualBreakpoints
 		};
@@ -125,8 +118,6 @@ class MockDebugSession extends LoggingDebugSession {
 	}
 
 	protected threadsRequest(response: DebugProtocol.ThreadsResponse): void {
-
-		// runtime supports now threads so just return a default thread.
 		response.body = {
 			threads: [
 				new Thread(MockDebugSession.THREAD_ID, "thread 1")
@@ -145,12 +136,9 @@ class MockDebugSession extends LoggingDebugSession {
 	}
 
 	protected scopesRequest(response: DebugProtocol.ScopesResponse, args: DebugProtocol.ScopesArguments): void {
-
 		const frameReference = args.frameId;
 		const scopes = new Array<Scope>();
-		scopes.push(new Scope("Local", this._variableHandles.create("local_" + frameReference), false));
-		scopes.push(new Scope("Global", this._variableHandles.create("global_" + frameReference), true));
-
+		scopes.push(new Scope("Variables", this._variableHandles.create("breakpoint_" + frameReference), false));
 		response.body = {
 			scopes: scopes
 		};
@@ -158,36 +146,60 @@ class MockDebugSession extends LoggingDebugSession {
 	}
 
 	protected variablesRequest(response: DebugProtocol.VariablesResponse, args: DebugProtocol.VariablesArguments): void {
-
 		const variables = new Array<DebugProtocol.Variable>();
 		const id = this._variableHandles.get(args.variablesReference);
-		if (id !== null) {
-			variables.push({
-				name: id + "_i",
-				type: "integer",
-				value: "123",
-				variablesReference: 0
-			});
-			variables.push({
-				name: id + "_f",
-				type: "float",
-				value: "3.14",
-				variablesReference: 0
-			});
-			variables.push({
-				name: id + "_s",
-				type: "string",
-				value: "hello world",
-				variablesReference: 0
-			});
-			variables.push({
-				name: id + "_o",
-				type: "object",
-				value: "Object",
-				variablesReference: this._variableHandles.create("object_")
-			});
+		if (id.indexOf("breakpoint_") === 0) {
+			for (const key in this._runtime._breakingScopeVariables) {
+				const value = this._runtime._breakingScopeVariables[key];
+				variables.push({
+					name: key,
+					type: typeof value,
+					value: value.toString(),
+					variablesReference: (typeof value === "object" ? this._variableHandles.create("object_scope_" + key) : 0)
+				});
+			}
+			for (const key in this._runtime._breakingThisVariables) {
+				const value = this._runtime._breakingThisVariables[key];
+				variables.push({
+					name: "this." + key,
+					type: typeof value,
+					value: value.toString(),
+					variablesReference: (typeof value === "object" ? this._variableHandles.create("object_this_" + key) : 0)
+				});
+			}
 		}
-
+		else if (id.indexOf("object_scope_") === 0) {
+			try {
+				const components = id.split("_")
+				let obj = this._runtime._breakingScopeVariables
+				components.forEach((it, idx) => { if (idx > 1) { obj = obj[it] } })
+				for (const key in obj) {
+					const value = obj[key];
+					variables.push({
+						name: key,
+						type: typeof value,
+						value: value.toString(),
+						variablesReference: (typeof value === "object" ? this._variableHandles.create(id + "_" + key) : 0)
+					});
+				}
+			} catch (error) { }
+		}
+		else if (id.indexOf("object_this_") === 0) {
+			try {
+				const components = id.split("_")
+				let obj = this._runtime._breakingThisVariables
+				components.forEach((it, idx) => { if (idx > 1) { obj = obj[it] } })
+				for (const key in obj) {
+					const value = obj[key];
+					variables.push({
+						name: key,
+						type: typeof value,
+						value: value.toString(),
+						variablesReference: (typeof value === "object" ? this._variableHandles.create(id + "_" + key) : 0)
+					});
+				}
+			} catch (error) { }
+		}
 		response.body = {
 			variables: variables
 		};
@@ -199,42 +211,26 @@ class MockDebugSession extends LoggingDebugSession {
 		this.sendResponse(response);
 	}
 
-	protected reverseContinueRequest(response: DebugProtocol.ReverseContinueResponse, args: DebugProtocol.ReverseContinueArguments): void { }
+	protected stepInRequest(response: DebugProtocol.StepInResponse, args: DebugProtocol.StepInArguments): void {
+		this._runtime.step();
+		this.sendResponse(response);
+	}
+
+    protected stepOutRequest(response: DebugProtocol.StepOutResponse, args: DebugProtocol.StepOutArguments): void {
+		this._runtime.step();
+		this.sendResponse(response);
+	}
 
 	protected nextRequest(response: DebugProtocol.NextResponse, args: DebugProtocol.NextArguments): void {
 		this._runtime.step();
 		this.sendResponse(response);
 	}
 
-	protected stepBackRequest(response: DebugProtocol.StepBackResponse, args: DebugProtocol.StepBackArguments): void { }
-
 	protected evaluateRequest(response: DebugProtocol.EvaluateResponse, args: DebugProtocol.EvaluateArguments): void {
-
 		let reply: string | undefined = undefined;
-
 		if (args.context === 'repl') {
-			// 'evaluate' supports to create and delete breakpoints from the 'repl':
-			const matches = /new +([0-9]+)/.exec(args.expression);
-			if (matches && matches.length === 2) {
-				const mbp = this._runtime.setBreakPoint(this._runtime.sourceFile, this.convertClientLineToDebugger(parseInt(matches[1])));
-				const bp = <DebugProtocol.Breakpoint>new Breakpoint(mbp.verified, this.convertDebuggerLineToClient(mbp.line), undefined, this.createSource(this._runtime.sourceFile));
-				bp.id = mbp.id;
-				this.sendEvent(new BreakpointEvent('new', bp));
-				reply = `breakpoint created`;
-			} else {
-				const matches = /del +([0-9]+)/.exec(args.expression);
-				if (matches && matches.length === 2) {
-					const mbp = this._runtime.clearBreakPoint(this._runtime.sourceFile, this.convertClientLineToDebugger(parseInt(matches[1])));
-					if (mbp) {
-						const bp = <DebugProtocol.Breakpoint>new Breakpoint(false);
-						bp.id = mbp.id;
-						this.sendEvent(new BreakpointEvent('removed', bp));
-						reply = `breakpoint deleted`;
-					}
-				}
-			}
+			this._runtime.eval(args.expression)
 		}
-
 		response.body = {
 			result: reply ? reply : `evaluate(context: '${args.context}', '${args.expression}')`,
 			variablesReference: 0
