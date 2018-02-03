@@ -17,17 +17,8 @@ class XTDebugSession extends vscode_debugadapter_1.LoggingDebugSession {
         this.setDebuggerLinesStartAt1(false);
         this.setDebuggerColumnsStartAt1(false);
         this._runtime = new xtRuntime_1.XTRuntime();
-        this._runtime.on('stopOnEntry', () => {
-            this.sendEvent(new vscode_debugadapter_1.StoppedEvent('entry', XTDebugSession.THREAD_ID));
-        });
-        this._runtime.on('stopOnStep', () => {
-            this.sendEvent(new vscode_debugadapter_1.StoppedEvent('step', XTDebugSession.THREAD_ID));
-        });
         this._runtime.on('stopOnBreakpoint', () => {
             this.sendEvent(new vscode_debugadapter_1.StoppedEvent('breakpoint', XTDebugSession.THREAD_ID));
-        });
-        this._runtime.on('stopOnException', () => {
-            this.sendEvent(new vscode_debugadapter_1.StoppedEvent('exception', XTDebugSession.THREAD_ID));
         });
         this._runtime.on('breakpointValidated', (bp) => {
             this.sendEvent(new vscode_debugadapter_1.BreakpointEvent('changed', { verified: bp.verified, id: bp.id }));
@@ -101,42 +92,56 @@ class XTDebugSession extends vscode_debugadapter_1.LoggingDebugSession {
     variablesRequest(response, args) {
         const variables = new Array();
         const id = this._variableHandles.get(args.variablesReference);
+        const makeVariables = (obj, prefix, valPrefix = "") => {
+            if (obj instanceof Array) {
+                obj.forEach((value, idx) => {
+                    let valueDesc = value.toString();
+                    if (value instanceof Array) {
+                        valueDesc = "Array[" + value.length + "]";
+                    }
+                    variables.push({
+                        name: valPrefix + idx.toString(),
+                        type: typeof value,
+                        value: valueDesc,
+                        variablesReference: (typeof value === "object" ? this._variableHandles.create(prefix + idx.toString()) : 0)
+                    });
+                });
+            }
+            else {
+                for (const key in obj) {
+                    const value = obj[key];
+                    let valueDesc = value.toString();
+                    if (value instanceof Array) {
+                        valueDesc = "Array[" + value.length + "]";
+                    }
+                    variables.push({
+                        name: valPrefix + key,
+                        type: typeof value,
+                        value: valueDesc,
+                        variablesReference: (typeof value === "object" ? this._variableHandles.create(prefix + key) : 0)
+                    });
+                }
+            }
+        };
         if (id.indexOf("breakpoint_") === 0) {
-            for (const key in this._runtime._breakingScopeVariables) {
-                const value = this._runtime._breakingScopeVariables[key];
-                variables.push({
-                    name: key,
-                    type: typeof value,
-                    value: value.toString(),
-                    variablesReference: (typeof value === "object" ? this._variableHandles.create("object_scope_" + key) : 0)
-                });
-            }
-            for (const key in this._runtime._breakingThisVariables) {
-                const value = this._runtime._breakingThisVariables[key];
-                variables.push({
-                    name: "this." + key,
-                    type: typeof value,
-                    value: value.toString(),
-                    variablesReference: (typeof value === "object" ? this._variableHandles.create("object_this_" + key) : 0)
-                });
-            }
+            makeVariables(this._runtime._breakingScopeVariables, "object_scope_");
+            makeVariables(this._runtime._breakingThisVariables, "object_this_", "this.");
         }
         else if (id.indexOf("object_scope_") === 0) {
             try {
                 const components = id.split("_");
                 let obj = this._runtime._breakingScopeVariables;
-                components.forEach((it, idx) => { if (idx > 1) {
-                    obj = obj[it];
-                } });
-                for (const key in obj) {
-                    const value = obj[key];
-                    variables.push({
-                        name: key,
-                        type: typeof value,
-                        value: value.toString(),
-                        variablesReference: (typeof value === "object" ? this._variableHandles.create(id + "_" + key) : 0)
-                    });
-                }
+                components.forEach((it, idx) => {
+                    if (idx > 1) {
+                        if (obj instanceof Array) {
+                            obj = obj[parseInt(it)];
+                        }
+                        else {
+                            obj = obj[it];
+                        }
+                    }
+                });
+                makeVariables(obj, id + "_");
             }
             catch (error) { }
         }
@@ -144,18 +149,17 @@ class XTDebugSession extends vscode_debugadapter_1.LoggingDebugSession {
             try {
                 const components = id.split("_");
                 let obj = this._runtime._breakingThisVariables;
-                components.forEach((it, idx) => { if (idx > 1) {
-                    obj = obj[it];
-                } });
-                for (const key in obj) {
-                    const value = obj[key];
-                    variables.push({
-                        name: key,
-                        type: typeof value,
-                        value: value.toString(),
-                        variablesReference: (typeof value === "object" ? this._variableHandles.create(id + "_" + key) : 0)
-                    });
-                }
+                components.forEach((it, idx) => {
+                    if (idx > 1) {
+                        if (obj instanceof Array) {
+                            obj = obj[parseInt(it)];
+                        }
+                        else {
+                            obj = obj[it];
+                        }
+                    }
+                });
+                makeVariables(obj, id + "_");
             }
             catch (error) { }
         }
@@ -195,7 +199,6 @@ class XTDebugSession extends vscode_debugadapter_1.LoggingDebugSession {
         return new vscode_debugadapter_1.Source(path_1.basename(filePath), this.convertDebuggerPathToClient(filePath), undefined, undefined, 'mock-adapter-data');
     }
 }
-// we don't support multiple threads, so we can use a hardcoded ID for the default thread
 XTDebugSession.THREAD_ID = 1;
 vscode_debugadapter_1.DebugSession.run(XTDebugSession);
 //# sourceMappingURL=xtDebug.js.map

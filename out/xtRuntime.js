@@ -68,6 +68,9 @@ class XTRuntime extends events_1.EventEmitter {
                         catch (error) { }
                         this.sendEvent('stopOnBreakpoint');
                     }
+                    else if (obj.type === "active") {
+                        this.resetBreakpoints(client);
+                    }
                 }
                 catch (error) { }
             }

@@ -66,7 +66,7 @@ export class XTRuntime extends EventEmitter {
 					const obj = JSON.parse(data)
 					if (obj.type === "console.log") {
 						const payload = new Buffer(obj.payload, 'base64').toString()
-						const bpIdentifier  = typeof obj.bpIdentifier === "string" && obj.bpIdentifier.length > 0 ? obj.bpIdentifier : "undefined:0"
+						const bpIdentifier = typeof obj.bpIdentifier === "string" && obj.bpIdentifier.length > 0 ? obj.bpIdentifier : "undefined:0"
 						this.sendEvent('output', payload, bpIdentifier.split(":")[0], bpIdentifier.split(":")[1])
 					}
 					else if (obj.type === "break") {
@@ -78,6 +78,9 @@ export class XTRuntime extends EventEmitter {
 							this._breakingScopeVariables = JSON.parse(obj.scope)
 						} catch (error) { }
 						this.sendEvent('stopOnBreakpoint');
+					}
+					else if (obj.type === "active") {
+						this.resetBreakpoints(client)
 					}
 				} catch (error) { }
 			}
