@@ -5,6 +5,8 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const fs_1 = require("fs");
 const events_1 = require("events");
+const express = require("express");
+const bodyParser = require("body-parser");
 const WebSocket = require("ws");
 var socketServer;
 var socketClients = [];
@@ -17,10 +19,39 @@ class XTRuntime extends events_1.EventEmitter {
         this._breakingId = undefined;
         this._breakingThisVariables = {};
         this._breakingScopeVariables = {};
+        this._http_status = "continue";
         this.setupSocketServer();
     }
     setupSocketServer() {
         if (socketServer === undefined) {
+            var httpServer = express();
+            httpServer.listen(8082);
+            httpServer.use(function (req, res, next) {
+                res.header('Access-Control-Allow-Origin', '*');
+                res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE');
+                next();
+            });
+            httpServer.post('/break', bodyParser.json({ limit: 2 * 1024 * 1024, type: 'text/plain' }), (req, res) => {
+                if (!req.body)
+                    return res.sendStatus(400);
+                this._http_status = "break";
+                this._breakingId = req.body.bpIdentifier;
+                try {
+                    this._breakingThisVariables = JSON.parse(req.body.this);
+                }
+                catch (error) { }
+                try {
+                    this._breakingScopeVariables = JSON.parse(req.body.scope);
+                }
+                catch (error) { }
+                this.sendEvent('stopOnBreakpoint');
+                res.send('break');
+            });
+            httpServer.get('/status', (req, res) => {
+                setTimeout(() => {
+                    res.send(this._http_status);
+                }, 100);
+            });
             socketServer = new WebSocket.Server({ port: 8081 });
         }
         this.resetClientEvents();
@@ -101,6 +132,7 @@ class XTRuntime extends events_1.EventEmitter {
         });
     }
     continue() {
+        this._http_status = "continue";
         socketClients.filter(client => {
             return client.readyState === WebSocket.OPEN;
         }).forEach(client => {
@@ -108,6 +140,7 @@ class XTRuntime extends events_1.EventEmitter {
         });
     }
     step(reverse = false, event = 'stopOnStep') {
+        this._http_status = "step";
         socketClients.filter(client => {
             return client.readyState === WebSocket.OPEN;
         }).forEach(client => {

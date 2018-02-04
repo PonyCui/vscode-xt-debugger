@@ -4,6 +4,8 @@
 
 import { readFileSync } from 'fs';
 import { EventEmitter } from 'events';
+import * as express from "express";
+import * as bodyParser from "body-parser";
 import * as WebSocket from 'ws'
 
 var socketServer: WebSocket.Server | undefined
@@ -29,8 +31,35 @@ export class XTRuntime extends EventEmitter {
 		this.setupSocketServer();
 	}
 
+	private _http_status = "continue"
+
 	setupSocketServer() {
 		if (socketServer === undefined) {
+			var httpServer = express()
+			httpServer.listen(8082)
+			httpServer.use(function (req, res, next) {
+				res.header('Access-Control-Allow-Origin', '*');
+				res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE');
+				next();
+			})
+			httpServer.post('/break', bodyParser.json({ limit: 2 * 1024 * 1024, type: 'text/plain' }), (req, res) => {
+				if (!req.body) return res.sendStatus(400)
+				this._http_status = "break"
+				this._breakingId = req.body.bpIdentifier
+				try {
+					this._breakingThisVariables = JSON.parse(req.body.this)
+				} catch (error) { }
+				try {
+					this._breakingScopeVariables = JSON.parse(req.body.scope)
+				} catch (error) { }
+				this.sendEvent('stopOnBreakpoint');
+				res.send('break')
+			})
+			httpServer.get('/status', (req, res) => {
+				setTimeout(() => {
+					res.send(this._http_status)
+				}, 100)
+			})
 			socketServer = new WebSocket.Server({ port: 8081 });
 		}
 		this.resetClientEvents()
@@ -85,7 +114,7 @@ export class XTRuntime extends EventEmitter {
 				} catch (error) { }
 			}
 		})
-		client.on('error', () => {})
+		client.on('error', () => { })
 	}
 
 	public start(program: string, stopOnEntry: boolean) {
@@ -115,6 +144,7 @@ export class XTRuntime extends EventEmitter {
 	}
 
 	public continue() {
+		this._http_status = "continue"
 		socketClients.filter(client => {
 			return client.readyState === WebSocket.OPEN
 		}).forEach(client => {
@@ -123,6 +153,7 @@ export class XTRuntime extends EventEmitter {
 	}
 
 	public step(reverse = false, event = 'stopOnStep') {
+		this._http_status = "step"
 		socketClients.filter(client => {
 			return client.readyState === WebSocket.OPEN
 		}).forEach(client => {

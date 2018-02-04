@@ -29,6 +29,8 @@
     "url": "https://github.com/XTStudio/vscode-xt-debugger/issues"
   },
   "dependencies": {
+    "body-parser": "^1.18.2",
+    "express": "^4.16.2",
     "vscode-debugadapter": "1.25.0",
     "vscode-debugprotocol": "1.25.0",
     "ws": "^4.0.0"
