@@ -22,9 +22,6 @@ class XTRuntime extends events_1.EventEmitter {
     setupSocketServer() {
         if (socketServer === undefined) {
             socketServer = new WebSocket.Server({ port: 8081 });
-            socketServer.on('error', (err) => {
-                console.error(err);
-            });
         }
         this.resetClientEvents();
         this.resetServerEvents();
@@ -37,6 +34,9 @@ class XTRuntime extends events_1.EventEmitter {
                 this.setupClientEvents(client);
                 client.send(JSON.stringify({ action: "reload", source: this._sourceCode }));
                 this.resetBreakpoints(client);
+            });
+            socketServer.on('error', (err) => {
+                console.error(err);
             });
         }
     }
