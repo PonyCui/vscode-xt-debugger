@@ -101,6 +101,7 @@ class XTRuntime extends events_1.EventEmitter {
                     }
                     else if (obj.type === "active") {
                         this.resetBreakpoints(client);
+                        this.sendEvent('output', "Client '" + obj.name + "' connected.");
                     }
                 }
                 catch (error) { }
