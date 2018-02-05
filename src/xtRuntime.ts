@@ -7,6 +7,7 @@ import { EventEmitter } from 'events';
 import * as express from "express";
 import * as bodyParser from "body-parser";
 import * as WebSocket from 'ws'
+import * as os from 'os'
 
 var socketServer: WebSocket.Server | undefined
 var socketClients: WebSocket[] = []
@@ -61,6 +62,16 @@ export class XTRuntime extends EventEmitter {
 				}, 100)
 			})
 			socketServer = new WebSocket.Server({ port: 8081 });
+			for (const key in os.networkInterfaces()) {
+				if (os.networkInterfaces().hasOwnProperty(key)) {
+					const element = os.networkInterfaces()[key];
+					element.forEach(it => {
+						if (it.family === "IPv4") {
+							this.sendEvent('output', 'Available on ' + it.address + ":8081", "debugger", "0")
+						}
+					})
+				}
+			}
 		}
 		this.resetClientEvents()
 		this.resetServerEvents()

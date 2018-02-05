@@ -8,6 +8,7 @@ const events_1 = require("events");
 const express = require("express");
 const bodyParser = require("body-parser");
 const WebSocket = require("ws");
+const os = require("os");
 var socketServer;
 var socketClients = [];
 class XTRuntime extends events_1.EventEmitter {
@@ -53,6 +54,16 @@ class XTRuntime extends events_1.EventEmitter {
                 }, 100);
             });
             socketServer = new WebSocket.Server({ port: 8081 });
+            for (const key in os.networkInterfaces()) {
+                if (os.networkInterfaces().hasOwnProperty(key)) {
+                    const element = os.networkInterfaces()[key];
+                    element.forEach(it => {
+                        if (it.family === "IPv4") {
+                            this.sendEvent('output', 'Available on ' + it.address + ":8081", "debugger", "0");
+                        }
+                    });
+                }
+            }
         }
         this.resetClientEvents();
         this.resetServerEvents();
