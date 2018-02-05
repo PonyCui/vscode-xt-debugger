@@ -110,7 +110,7 @@ export class XTRuntime extends EventEmitter {
 					}
 					else if (obj.type === "active") {
 						this.resetBreakpoints(client)
-						this.sendEvent('output', "Client '" + obj.name + "' connected.")
+						this.sendEvent('output', "Client '" + obj.name + "' connected.", "echo", '0')
 					}
 				} catch (error) { }
 			}
