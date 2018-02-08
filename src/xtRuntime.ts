@@ -11,6 +11,20 @@ import * as os from 'os'
 
 var socketServer: WebSocket.Server | undefined
 var socketClients: WebSocket[] = []
+const socketAddresses: string[] = (function() {
+	var output: string[] = []
+	for (const key in os.networkInterfaces()) {
+		if (os.networkInterfaces().hasOwnProperty(key)) {
+			const element = os.networkInterfaces()[key];
+			element.forEach(it => {
+				if (it.family === "IPv4") {
+					output.push(it.address)
+				}
+			})
+		}
+	}
+	return output
+})()
 
 export interface XTBreakpoint {
 	id: number;
@@ -61,17 +75,13 @@ export class XTRuntime extends EventEmitter {
 					res.send(this._http_status)
 				}, 100)
 			})
+			httpServer.get('/addr', (req, res) => {
+				res.send(JSON.stringify(socketAddresses.map(it => it + ":8081")))
+			})
 			socketServer = new WebSocket.Server({ port: 8081 });
-			for (const key in os.networkInterfaces()) {
-				if (os.networkInterfaces().hasOwnProperty(key)) {
-					const element = os.networkInterfaces()[key];
-					element.forEach(it => {
-						if (it.family === "IPv4") {
-							this.sendEvent('output', 'Available on ' + it.address + ":8081", "debugger", "0")
-						}
-					})
-				}
-			}
+			socketAddresses.forEach(it => {
+				this.sendEvent('output', 'Available on ' + it + ":8081", "debugger", "0")
+			})
 		}
 		this.resetClientEvents()
 		this.resetServerEvents()
