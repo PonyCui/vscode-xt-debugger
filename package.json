@@ -16,7 +16,7 @@
     "vscode": "^1.18.0",
     "node": "^7.9.0"
   },
-  "icon": "images/mock-debug-icon.png",
+  "icon": "images/xt-debug-icon.png",
   "categories": [
     "Debuggers"
   ],
@@ -45,6 +45,9 @@
     "tslint": "5.8.0",
     "vsce": "1.35.0"
   },
+  "extensionDependencies": [
+    "JuanCasanova.awesometypescriptproblemmatcher"
+  ],
   "scripts": {
     "prepublish": "tsc -p ./src",
     "compile": "tsc -p ./src",
